@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Programmed Love - Para Mi Lissi</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #050505;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            perspective: 1200px;
+        }
+
+        /* FONDO ESPACIAL PURO CON ESTRELLAS PARPADEANTES */
+        .space-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(white, rgba(255,255,255,.3) 2px, transparent 40px),
+                radial-gradient(white, rgba(255,255,255,.2) 1px, transparent 30px),
+                radial-gradient(white, rgba(255,255,255,.15) 2px, transparent 40px);
+            background-size: 550px 550px, 350px 350px, 250px 250px;
+            background-position: 0 0, 40px 60px, 130px 270px;
+            animation: backgroundGlow 8s infinite alternate;
+            z-index: 1;
+            opacity: 0.6;
+        }
+
+        @keyframes backgroundGlow {
+            0% { opacity: 0.4; }
+            100% { opacity: 0.8; }
+        }
+
+        /* MOTOR GRAFICO CANVAS */
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* DESTELLO CENTRAL */
+        .flash-glow {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: radial-gradient(circle, rgba(255,105,180,1) 0%, rgba(255,20,147,0.5) 40%, transparent 70%);
+            border-radius: 50%;
+            z-index: 15;
+            pointer-events: none;
+            opacity: 0;
+            transform: scale(1);
+        }
+
+        .flash-active {
+            animation: flashBurst 1.2s ease-out forwards;
+        }
+
+        @keyframes flashBurst {
+            0% { opacity: 0; transform: scale(1); filter: blur(0px); }
+            15% { opacity: 1; transform: scale(45); filter: blur(5px); }
+            100% { opacity: 0; transform: scale(65); filter: blur(20px); }
+        }
+
+        /* DEDICATORIA SUTIL ESQUINA IZQUIERDA */
+        .dedication-tag {
+            position: fixed;
+            bottom: 25px;
+            left: 30px;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-style: italic;
+            font-size: 15pt;
+            color: #ffb6c1;
+            text-shadow: 0 0 5px rgba(255, 20, 147, 0.4);
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 2.5s ease-in-out;
+            letter-spacing: 1px;
+            user-select: none;
+        }
+
+        /* MENU DE ENTRADA */
+        .music-prompt {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #050505;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            cursor: pointer;
+            transition: opacity 0.5s ease;
+        }
+
+        .music-prompt h1 {
+            font-size: 16pt;
+            color: #ff69b4;
+            margin-bottom: 25px;
+            text-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+            font-weight: 400;
+            letter-spacing: 2px;
+        }
+
+        .start-btn {
+            padding: 12px 40px;
+            background: transparent;
+            border: 2px solid #ff69b4;
+            color: #ff69b4;
+            font-size: 11pt;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .start-btn:hover {
+            background: #ff69b4;
+            color: #050505;
+            box-shadow: 0 0 30px #ff69b4;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="space-bg"></div>
+    <div class="flash-glow" id="flash"></div>
+    <div class="dedication-tag" id="dedication">Para Mi Lissi</div>
+
+    <div class="music-prompt" id="prompt" onclick="startLoveStory()">
+        <h1>Click para abrir el Corazón</h1>
+        <button class="start-btn">ENTRAR ❤️</button>
+    </div>
+
+    <canvas id="loveCanvas"></canvas>
+
+    <audio id="bg-music" loop>
+        <source src="loveyou.mp3" type="audio/mp3">
+    </audio>
+
+    <script>
+        const canvas = document.getElementById('loveCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        });
+
+        const heartPoints = 210; 
+        let particles = [];
+        let isMusicPlaying = false;
+        let cycleCount = 0;
+        let currentMode = "HEART"; // HEART -> AW -> HEART -> AW -> PHOTO
+        let modeTimer = 0;
+        
+        let heartRotationY = 0;
+        let globalScale = 1;
+        let pulseDirection = 1;
+        let photoOpacity = 0;
+
+        // Instancia del archivo local
+        const targetPhoto = new Image();
+        targetPhoto.src = 'loviu.jpeg';
+
+        // Coordenadas Letra A
+        function getLetterAPosition(index, total) {
+            const pct = index / total;
+            let x = 0, y = 0;
+            if (pct < 0.45) { 
+                const subPct = pct / 0.45;
+                x = -130 + 65 * subPct; y = 130 - 260 * subPct;
+            } else if (pct < 0.90) { 
+                const subPct = (pct - 0.45) / 0.45;
+                x = -65 + 65 * subPct; y = -130 + 260 * subPct;
+            } else { 
+                const subPct = (pct - 0.90) / 0.10;
+                x = -85 + 40 * subPct; y = 45; 
+            }
+            return { x: x - 180, y: y };
+        }
+
+        // Coordenadas Signo +
+        function getPlusSignPosition(index, total) {
+            const pct = index / total;
+            let x = 0, y = 0;
+            if (pct < 0.5) { 
+                const subPct = pct / 0.5;
+                x = -35 + 70 * subPct; y = 0;
+            } else { 
+                const subPct = (pct - 0.5) / 0.5;
+                x = 0; y = -35 + 70 * subPct;
+            }
+            return { x: x, y: y };
+        }
+
+        // Coordenadas Letra W
+        function getLetterWPosition(index, total) {
+            const pct = index / total;
+            let x = 0, y = 0;
+            if (pct < 0.25) { 
+                const subPct = pct / 0.25;
+                x = -130 + 65 * subPct; y = -130 + 260 * subPct;
+            } else if (pct < 0.50) { 
+                const subPct = (pct - 0.25) / 0.25;
+                x = -65 + 65 * subPct; y = 130 - 200 * subPct;
+            } else if (pct < 0.75) { 
+                const subPct = (pct - 0.50) / 0.25;
+                x = 0 + 65 * subPct; y = -70 + 200 * subPct;
+            } else { 
+                const subPct = (pct - 0.75) / 0.25;
+                x = 65 + 65 * subPct; y = 130 - 260 * subPct;
+            }
+            return { x: x + 230, y: y };
+        }
+
+        // Trazo matemático del corazón para la máscara
+        function drawHeartPath(context, centerX, centerY, size) {
+            context.beginPath();
+            for (let i = 0; i <= 200; i++) {
+                const t = (i / 200) * Math.PI * 2;
+                const x = centerX + 16 * Math.pow(Math.sin(t), 3) * (size / 16);
+                const y = centerY - (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)) * (size / 16);
+                if (i === 0) context.moveTo(x, y);
+                else context.lineTo(x, y);
+            }
+            context.closePath();
+        }
+
+        function initParticles() {
+            particles = [];
+            const segment = heartPoints / 3;
+
+            for (let i = 0; i < heartPoints; i++) {
+                const t = -Math.PI + (2 * Math.PI * i) / heartPoints;
+                const hx = 16 * Math.pow(Math.sin(t), 3) * 14;
+                const hy = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)) * 14;
+
+                let lPos;
+                if (i < segment) lPos = getLetterAPosition(i, segment);
+                else if (i < segment * 2) lPos = getPlusSignPosition(i - segment, segment);
+                else lPos = getLetterWPosition(i - (segment * 2), segment);
+
+                particles.push({
+                    x: (Math.random() - 0.5) * width,
+                    y: -height / 2 - Math.random() * 600,
+                    z: (Math.random() - 0.5) * 200,
+                    hx: hx, hy: hy, hz: 0,
+                    lx: lPos.x, ly: lPos.y, lz: 0,
+                    targetColor: { r: 255, g: 182, b: 193 },
+                    currentColor: { r: 255, g: 182, b: 193 },
+                    char: 'i love you',
+                    size: 13,
+                    speed: 0.04 + Math.random() * 0.02
+                });
+            }
+        }
+
+        function triggerFlash() {
+            const flash = document.getElementById('flash');
+            flash.classList.remove('flash-active');
+            void flash.offsetWidth; 
+            flash.classList.add('flash-active');
+        }
+
+        function updateAndRender() {
+            ctx.clearRect(0, 0, width, height);
+
+            globalScale += 0.003 * pulseDirection;
+            if (globalScale > 1.04 || globalScale < 0.96) pulseDirection *= -1;
+
+            modeTimer += 16.66;
+
+            // CONTROLADOR DE MODOS
+            if (currentMode === "HEART") {
+                heartRotationY += 0.015;
+                if (photoOpacity > 0) photoOpacity -= 0.05;
+                if (modeTimer > 8000) { 
+                    currentMode = "AW";
+                    modeTimer = 0;
+                }
+            } else if (currentMode === "AW") {
+                let diff = 0 - (heartRotationY % (Math.PI * 2));
+                heartRotationY += diff * 0.05;
+                
+                if (modeTimer > 8000) { 
+                    cycleCount++;
+                    modeTimer = 0;
+                    
+                    if (cycleCount >= 2) {
+                        currentMode = "PHOTO";
+                        triggerFlash();
+                        document.getElementById('dedication').style.opacity = '0';
+                    } else {
+                        currentMode = "HEART";
+                        triggerFlash();
+                    }
+                }
+            } else if (currentMode === "PHOTO") {
+                if (photoOpacity < 1) photoOpacity += 0.025;
+
+                let diff = 0 - (heartRotationY % (Math.PI * 2));
+                heartRotationY += diff * 0.05;
+
+                if (modeTimer > 12000) { 
+                    currentMode = "EXPLODE";
+                    modeTimer = 0;
+                    particles.forEach(p => {
+                        p.tx = p.x + (Math.random() - 0.5) * width * 1.5;
+                        p.ty = p.y + height + Math.random() * 400; 
+                        p.tz = p.z - 400;
+                    });
+                }
+            } else if (currentMode === "EXPLODE") {
+                if (photoOpacity > 0) photoOpacity -= 0.04;
+                if (modeTimer > 3500) { 
+                    cycleCount = 0;
+                    currentMode = "HEART";
+                    modeTimer = 0;
+                    initParticles();
+                    document.getElementById('dedication').style.opacity = '0.25';
+                    triggerFlash();
+                }
+            }
+
+            // AJUSTE DE REENCUADRE COMPARTIDO DENTRO DEL CORAZÓN
+            if (photoOpacity > 0 && targetPhoto.complete) {
+                ctx.save();
+                
+                // 1. Definir tamaño base de la máscara del corazón
+                const heartSize = 230 * globalScale; 
+                drawHeartPath(ctx, width / 2, height / 2, heartSize);
+                ctx.clip(); 
+
+                // 2. Escalado estilo 'Cover' proporcional
+                const frameBoxSize = heartSize * 2.2; 
+                let renderW, renderH;
+                const imgRatio = targetPhoto.width / targetPhoto.height;
+
+                if (imgRatio > 1) {
+                    renderH = frameBoxSize;
+                    renderW = frameBoxSize * imgRatio;
+                } else {
+                    renderW = frameBoxSize;
+                    renderH = frameBoxSize / imgRatio;
+                }
+
+                // Ajuste de coordenadas: Agregamos un desplazamiento positivo en X (+ frameBoxSize * 0.16)
+                // para rodar la foto a la derecha y centrar los dos rostros equitativamente en el corazón.
+                const posX = (width - renderW) / 2 + (frameBoxSize * 0.16);
+                const posY = (height - renderH) / 2;
+
+                // 3. Renderizar la imagen
+                ctx.globalAlpha = photoOpacity;
+                ctx.drawImage(targetPhoto, posX, posY, renderW, renderH);
+
+                // 4. Capa de fusión neón rosa
+                ctx.globalCompositeOperation = "screen";
+                ctx.fillStyle = "rgba(255, 20, 147, 0.28)";
+                ctx.fillRect(0, 0, width, height);
+
+                ctx.restore();
+                ctx.globalCompositeOperation = "source-over";
+                ctx.globalAlpha = 1.0;
+            }
+
+            // RENDERIZADO DE TEXTO FLOTANTE
+            particles.forEach((p) => {
+                let tx = p.x, ty = p.y, tz = p.z;
+
+                if (currentMode === "HEART" || currentMode === "PHOTO") {
+                    let rx = p.hx * Math.cos(heartRotationY) - p.hz * Math.sin(heartRotationY);
+                    let rz = p.hx * Math.sin(heartRotationY) + p.hz * Math.cos(heartRotationY);
+                    tx = rx * globalScale; ty = p.hy * globalScale; tz = rz;
+                    p.targetColor = { r: 255, g: 182, b: 193 };
+                    p.char = 'i love you'; p.size = 13;
+                } else if (currentMode === "AW") {
+                    let rx = p.lx * Math.cos(heartRotationY) - p.lz * Math.sin(heartRotationY);
+                    let rz = p.lx * Math.sin(heartRotationY) + p.lz * Math.cos(heartRotationY);
+                    tx = rx; ty = p.ly; tz = rz;
+                    p.targetColor = { r: 255, g: 105, b: 180 };
+                } else if (currentMode === "EXPLODE") {
+                    tx = p.tx; ty = p.ty; tz = p.tz;
+                }
+
+                p.x += (tx - p.x) * p.speed;
+                p.y += (ty - p.y) * p.speed;
+                p.z += (tz - p.z) * p.speed;
+
+                p.currentColor.r += (p.targetColor.r - p.currentColor.r) * 0.1;
+                p.currentColor.g += (p.targetColor.g - p.currentColor.g) * 0.1;
+                p.currentColor.b += (p.targetColor.b - p.currentColor.b) * 0.1;
+
+                const perspective = 900;
+                const scale = perspective / (perspective + p.z);
+                const screenX = width / 2 + p.x * scale;
+                const screenY = height / 2 + p.y * scale;
+
+                if (screenX >= 0 && screenX <= width && screenY >= 0 && screenY <= height) {
+                    ctx.font = `bold ${p.size * scale}px Arial`;
+                    ctx.fillStyle = `rgb(${Math.floor(p.currentColor.r)}, ${Math.floor(p.currentColor.g)}, ${Math.floor(p.currentColor.b)})`;
+                    
+                    ctx.shadowBlur = 10 * scale;
+                    ctx.shadowColor = "rgba(255, 20, 147, 0.8)";
+                    
+                    ctx.fillText(p.char, screenX, screenY);
+                }
+            });
+
+            requestAnimationFrame(updateAndRender);
+        }
+
+        initParticles();
+
+        function startLoveStory() {
+            const prompt = document.getElementById('prompt');
+            prompt.style.opacity = 0;
+            setTimeout(() => prompt.style.display = 'none', 500);
+
+            if (!isMusicPlaying) {
+                const audio = document.getElementById('bg-music');
+                audio.volume = 0.8;
+                audio.play().catch(e => console.log("Audio activo"));
+                isMusicPlaying = true;
+            }
+
+            document.getElementById('dedication').style.opacity = '0.25';
+            updateAndRender();
+        }
+    </script>
+</body>
+</html>
